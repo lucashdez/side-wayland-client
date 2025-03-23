@@ -15,6 +15,9 @@ pub fn build(b: *std.Build) void {
 
     exe_mod.link_libc = true;
     exe_mod.linkSystemLibrary("wayland-client", .{});
+    exe_mod.addIncludePath(b.path("include"));
+    exe_mod.addLibraryPath(b.path("include"));
+    exe_mod.linkSystemLibrary("xdg-shell-library", .{.needed = true});
 
     const exe = b.addExecutable(.{
         .name = "wayland-client",
