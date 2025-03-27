@@ -57,7 +57,7 @@ fn xdg_wm_base_ping(data: ?*anyopaque, base: ?*wl.xdg_wm_base, serial: u32) call
 
 fn draw_frame(state: *WlState) !?*wl.wl_buffer {
 
-    const pool_size = (1920 * 4) * 1080 * 2;
+    const pool_size = ((1920 * 4) * 1080 * 2) * 4;
 
     state.shm_pool = wl.wl_shm_create_pool(state.shm, 0, pool_size);
     const pool_data = try std.posix.mmap(null, pool_size, std.posix.PROT.READ | std.posix.PROT.WRITE, .{ .ANONYMOUS = true, .TYPE = .SHARED }, 0, 0);
