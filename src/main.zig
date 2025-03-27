@@ -55,11 +55,38 @@ fn xdg_wm_base_ping(data: ?*anyopaque, base: ?*wl.xdg_wm_base, serial: u32) call
     wl.xdg_wm_base_pong(base, serial);
 }
 
+fn draw_frame(state: *WlState) !?*wl.wl_buffer {
+
+    const pool_size = (1920 * 4) * 1080 * 2;
+
+    state.shm_pool = wl.wl_shm_create_pool(state.shm, 0, pool_size);
+    const pool_data = try std.posix.mmap(null, pool_size, std.posix.PROT.READ | std.posix.PROT.WRITE, .{ .ANONYMOUS = true, .TYPE = .SHARED }, 0, 0);
+
+    const buffer: ?*wl.wl_buffer = wl.wl_shm_pool_create_buffer(state.shm_pool, 0, 1920, 1080, 4, wl.WL_SHM_FORMAT_XRGB8888);
+
+    const pixels: []u32 = @as([*]u32, @ptrCast(pool_data.ptr))[0..pool_data.len];
+
+    for (0..1080) |i| {
+        for (0..1920) |j| {
+            if ((i + j / 8 * 8) % 16 < 8) {
+                pixels[i * 1920 + j] = 0xFF666666;
+            } else {
+                pixels[i * 1920 + j] = 0xFFEEEEEE;
+            }
+        }
+    }
+
+    return buffer;
+}
+
 fn xdg_surface_configure(data: ?*anyopaque, xdg_surface: ?*wl.xdg_surface, serial: u32) callconv(.c) void {
     if (data) |data_ptr| {
         const state: *WlState = @alignCast(@ptrCast(data_ptr));
-        _ = state;
         _ = wl.xdg_surface_ack_configure(xdg_surface, serial);
+
+        const buffer = draw_frame(state) catch null;
+        wl.wl_surface_attach(state.surface, buffer, 0, 0);
+        wl.wl_surface_commit(state.surface);
     }
 }
 
@@ -93,33 +120,8 @@ pub fn main() !void {
     wl.xdg_toplevel_set_title(state.xdg_toplevel, "something");
     wl.wl_surface_commit(state.surface);
 
+
     while (wl.wl_display_dispatch(state.display) != 0) {
+        wl.wl_surface_damage(state.surface, 0, 0, std.math.maxInt(i32), std.math.maxInt(i32));
     }
-
-
-    // TODO: Move this to draw_frame func()
-    const pool_size = (1920 * 4) * 1080 * 2;
-    const fd = try create_shm_file();
-    defer std.posix.close(fd);
-
-    state.shm_pool = wl.wl_shm_create_pool(state.shm, fd, pool_size);
-    const pool_data = try std.posix.mmap(null, pool_size, std.posix.PROT.READ | std.posix.PROT.WRITE, .{ .TYPE = .SHARED }, fd, 0);
-
-    const buffer = wl.wl_shm_pool_create_buffer(state.shm_pool, 0, 1920, 1080, 4, wl.WL_SHM_FORMAT_XRGB8888);
-
-    const pixels: []u32 = @as([*]u32, @ptrCast(pool_data.ptr))[0..pool_data.len];
-
-    for (0..1080) |i| {
-        for (0..1920) |j| {
-            if ((i + j / 8 * 8) % 16 < 8) {
-                pixels[i * 1920 + j] = 0xFF666666;
-            } else {
-                pixels[i * 1920 + j] = 0xFFEEEEEE;
-            }
-        }
-    }
-
-    wl.wl_surface_attach(state.surface, buffer, 0, 0);
-    wl.wl_surface_damage(state.surface, 0, 0, std.math.maxInt(i32), std.math.maxInt(i32));
-    wl.wl_surface_commit(state.surface);
 }
